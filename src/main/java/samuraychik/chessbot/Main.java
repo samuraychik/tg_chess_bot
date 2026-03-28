@@ -2,6 +2,7 @@ package samuraychik.chessbot;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.sql.SQLException;
 import java.util.Properties;
 
 import org.telegram.telegrambots.meta.TelegramBotsApi;
@@ -9,6 +10,7 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 
 import samuraychik.chessbot.bot.ChessBot;
+import samuraychik.chessbot.db.DatabaseConnection;
 
 public class Main {
     public static void main(String[] args) {
@@ -26,6 +28,17 @@ public class Main {
 
         String token = config.getProperty("bot.token");
         String username = config.getProperty("bot.username");
+        String dbUrl = config.getProperty("db.url");
+        String dbUser = config.getProperty("db.user");
+        String dbPassword = config.getProperty("db.password");
+
+        try {
+            DatabaseConnection.getInstance(dbUrl, dbUser, dbPassword);
+            System.out.println("бдшка подключена!!!");
+        } catch (SQLException e) {
+            System.err.println(e);
+            return;
+        }
 
         try {
             TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
