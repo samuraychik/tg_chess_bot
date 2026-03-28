@@ -1,6 +1,6 @@
 \encoding UTF8
 
-INSERT INTO puzzles (name, difficulty, moves_count, fen, player_color, moves)
+INSERT INTO puzzles (name, level, moves_count, fen, player_color, moves)
 VALUES
     (
         'дурацццкий мат',

@@ -3,6 +3,7 @@ package samuraychik.chessbot.bot;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.util.Map;
 
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
@@ -10,6 +11,7 @@ import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import samuraychik.chessbot.dao.PuzzleDao;
+import samuraychik.chessbot.model.Level;
 import samuraychik.chessbot.model.Puzzle;
 import samuraychik.chessbot.model.PuzzleMove;
 import samuraychik.chessbot.renderer.BoardRenderer;
@@ -47,17 +49,32 @@ public class ChessBot extends TelegramLongPollingBot {
         }
 
         switch (text) {
-            case "/start" -> sendMessage(chatId, "команда старт!!!");
+            case "/start" -> sendMessage(chatId, MessageTexts.START);
+            case "/help" -> sendMessage(chatId, MessageTexts.HELP);
             case "/debug" -> sendMessage(chatId, "chatId: " + chatId + "\nstate: " + session.getState());
             case "/puzzle" -> startPuzzle(chatId, session);
+            case "/stats" -> sendStats(chatId);
             default -> {
             }
         }
     }
 
+    private void sendStats(long chatId) {
+        try {
+            Map<Level, Integer> stats = puzzleDao.getSolvedCountByLevel(chatId);
+            int total = stats.get(Level.EASY) + stats.get(Level.MEDIUM) + stats.get(Level.HARD);
+            String text = String.format(
+                    "Решено задач: %d\n🟢 Easy: %d\n🟡 Medium: %d\n🔴 Hard: %d",
+                    total, stats.get(Level.EASY), stats.get(Level.MEDIUM), stats.get(Level.HARD));
+            sendMessage(chatId, text);
+        } catch (SQLException e) {
+            System.err.println(e);
+        }
+    }
+
     private void startPuzzle(long chatId, UserSession session) {
         try {
-            Puzzle puzzle = puzzleDao.getRandom("EASY", chatId);
+            Puzzle puzzle = puzzleDao.getRandom(Level.EASY, chatId);
             if (puzzle == null) {
                 sendMessage(chatId, "нет задач(");
                 return;
