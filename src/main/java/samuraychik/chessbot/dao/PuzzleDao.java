@@ -18,10 +18,16 @@ public class PuzzleDao {
         this.connection = connection;
     }
 
-    public Puzzle getRandom(String difficulty) throws SQLException {
-        String sql = "SELECT * FROM puzzles WHERE difficulty = ? ORDER BY RANDOM() LIMIT 1";
+    public Puzzle getRandom(String difficulty, long userId) throws SQLException {
+        String sql = """
+                SELECT * FROM puzzles
+                WHERE difficulty = ?
+                AND id NOT IN (SELECT puzzle_id FROM user_solved_puzzles WHERE user_id = ?)
+                ORDER BY RANDOM() LIMIT 1
+                    """;
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setString(1, difficulty);
+            stmt.setLong(2, userId);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
                     return mapRow(rs);

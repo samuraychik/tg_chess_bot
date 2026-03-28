@@ -33,9 +33,10 @@ public class Main {
         String dbUser = config.getProperty("db.user");
         String dbPassword = config.getProperty("db.password");
 
+        DatabaseConnection db;
         PuzzleDao puzzleDao;
         try {
-            DatabaseConnection db = DatabaseConnection.getInstance(dbUrl, dbUser, dbPassword);
+            db = DatabaseConnection.getInstance(dbUrl, dbUser, dbPassword);
             puzzleDao = new PuzzleDao(db.getConnection());
             System.out.println("бдшка подключена!!!");
         } catch (SQLException e) {
@@ -45,7 +46,7 @@ public class Main {
 
         try {
             TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
-            botsApi.registerBot(new ChessBot(token, username, puzzleDao));
+            botsApi.registerBot(new ChessBot(token, username, puzzleDao, db.getConnection()));
             System.out.println("бот запущен!!!");
         } catch (TelegramApiException e) {
             System.err.println(e);
