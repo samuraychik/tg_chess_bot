@@ -13,6 +13,16 @@ public class PuzzleMove {
     }
 
     public String getNotation() {
+        char fromFile = fromSquare.charAt(0);
+        char toFile = toSquare.charAt(0);
+
+        if (piece.equals("K")) {
+            if (fromFile == 'e' && toFile == 'g') return "O-O";
+            if (fromFile == 'e' && toFile == 'c') return "O-O-O";
+        }
+        if (piece.equals("P") && fromFile != toFile) {
+            return "" + fromFile + toFile;
+        }
         return piece.equals("P") ? toSquare : piece + toSquare;
     }
 
