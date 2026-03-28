@@ -10,6 +10,7 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 
 import samuraychik.chessbot.bot.ChessBot;
+import samuraychik.chessbot.dao.PuzzleDao;
 import samuraychik.chessbot.db.DatabaseConnection;
 
 public class Main {
@@ -32,8 +33,10 @@ public class Main {
         String dbUser = config.getProperty("db.user");
         String dbPassword = config.getProperty("db.password");
 
+        PuzzleDao puzzleDao;
         try {
-            DatabaseConnection.getInstance(dbUrl, dbUser, dbPassword);
+            DatabaseConnection db = DatabaseConnection.getInstance(dbUrl, dbUser, dbPassword);
+            puzzleDao = new PuzzleDao(db.getConnection());
             System.out.println("бдшка подключена!!!");
         } catch (SQLException e) {
             System.err.println(e);
@@ -42,7 +45,7 @@ public class Main {
 
         try {
             TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
-            botsApi.registerBot(new ChessBot(token, username));
+            botsApi.registerBot(new ChessBot(token, username, puzzleDao));
             System.out.println("бот запущен!!!");
         } catch (TelegramApiException e) {
             System.err.println(e);

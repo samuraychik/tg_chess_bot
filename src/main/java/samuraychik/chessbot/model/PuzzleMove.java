@@ -27,4 +27,9 @@ public class PuzzleMove {
     public String getToSquare() {
         return toSquare;
     }
+
+    @Override
+    public String toString() {
+        return piece + fromSquare + "-" + toSquare;
+    }
 }
