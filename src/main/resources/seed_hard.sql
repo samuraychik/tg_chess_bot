@@ -79,7 +79,7 @@ VALUES
         3,
         '5r1k/pp1b1ppp/8/3Np3/2qb3R/P7/1PP3P1/2KQ4 w - - 0 1',
         'WHITE',
-        'R_h5-h7,K_h8-h7,Q_d1-h5,K_h7-g8,N_d5-e7'
+        'R_h4-h7,K_h8-h7,Q_d1-h5,K_h7-g8,N_d5-e7'
     ),
     (
         '',

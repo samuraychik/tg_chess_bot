@@ -95,7 +95,7 @@ VALUES
         2,
         '5r1k/6p1/8/2q3N1/8/8/5PPP/3Q2K1 w - - 0 1',
         'WHITE',
-        'Q_e1-h5,K_h8-g8,Q_h5-h7'
+        'Q_d1-h5,K_h8-g8,Q_h5-h7'
     ),
     (
         '',
