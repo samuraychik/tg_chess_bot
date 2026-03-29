@@ -15,3 +15,11 @@ CREATE TABLE
         puzzle_id INT NOT NULL REFERENCES puzzles (id),
         PRIMARY KEY (user_id, puzzle_id)
     );
+
+CREATE TABLE
+    IF NOT EXISTS user_settings (
+        user_id BIGINT PRIMARY KEY,
+        allow_repeated BOOLEAN NOT NULL DEFAULT false,
+        preferred_level TEXT DEFAULT NULL
+            CHECK (preferred_level IN ('EASY', 'MEDIUM', 'HARD', 'RANDOM'))
+    );

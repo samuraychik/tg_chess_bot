@@ -22,6 +22,8 @@ public class PuzzleDao {
     }
 
     public Puzzle getRandom(Level level, long userId) throws SQLException {
+        if (level == Level.RANDOM)
+            return getRandom(userId);
         String sql = """
                 SELECT * FROM puzzles
                 WHERE level = ?
@@ -48,6 +50,33 @@ public class PuzzleDao {
                 """;
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setLong(1, userId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return mapRow(rs);
+                }
+            }
+        }
+        return null;
+    }
+
+    public Puzzle getRandom(Level level) throws SQLException {
+        if (level == Level.RANDOM)
+            return getRandom();
+        String sql = "SELECT * FROM puzzles WHERE level = ? ORDER BY RANDOM() LIMIT 1";
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setString(1, level.name());
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return mapRow(rs);
+                }
+            }
+        }
+        return null;
+    }
+
+    public Puzzle getRandom() throws SQLException {
+        String sql = "SELECT * FROM puzzles ORDER BY RANDOM() LIMIT 1";
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
                     return mapRow(rs);

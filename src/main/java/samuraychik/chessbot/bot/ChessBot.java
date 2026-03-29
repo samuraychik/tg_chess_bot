@@ -13,9 +13,11 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import samuraychik.chessbot.dao.PuzzleDao;
+import samuraychik.chessbot.dao.UserSettingsDao;
 import samuraychik.chessbot.model.Level;
 import samuraychik.chessbot.model.Puzzle;
 import samuraychik.chessbot.model.PuzzleMove;
+import samuraychik.chessbot.model.UserSettings;
 import samuraychik.chessbot.renderer.BoardRenderer;
 import samuraychik.chessbot.renderer.FenParser;
 import samuraychik.chessbot.session.SessionManager;
@@ -27,11 +29,13 @@ public class ChessBot extends TelegramLongPollingBot {
     private final String botUsername;
     private final SessionManager sessionManager = new SessionManager();
     private final PuzzleDao puzzleDao;
+    private final UserSettingsDao userSettingsDao;
 
-    public ChessBot(String botToken, String botUsername, PuzzleDao puzzleDao) {
+    public ChessBot(String botToken, String botUsername, PuzzleDao puzzleDao, UserSettingsDao userSettingsDao) {
         super(botToken);
         this.botUsername = botUsername;
         this.puzzleDao = puzzleDao;
+        this.userSettingsDao = userSettingsDao;
     }
 
     @Override
@@ -57,7 +61,11 @@ public class ChessBot extends TelegramLongPollingBot {
 
         switch (data) {
             case "RESET_CONFIRM" -> handleResetConfirm(chatId);
-            default -> handleLevelSelected(chatId, session, data);
+            case "SETTINGS_TOGGLE_REPEATED" -> handleToggleRepeated(chatId);
+            case "SETTINGS_LEVEL_EASY", "SETTINGS_LEVEL_MEDIUM", "SETTINGS_LEVEL_HARD",
+                    "SETTINGS_LEVEL_RANDOM", "SETTINGS_LEVEL_NULL" ->
+                handleSetPreferredLevel(chatId, data);
+            default -> handleLevelSelected(chatId, session, Level.valueOf(data));
         }
     }
 
@@ -76,8 +84,9 @@ public class ChessBot extends TelegramLongPollingBot {
             case "/help" -> sendMessage(chatId, MessageTexts.HELP);
             case "/debug" -> sendMessage(chatId, "chatId: " + chatId + "\nstate: " + session.getState());
             case "/stats" -> sendStats(chatId);
-            case "/puzzle" -> sendLevelKeyboard(chatId);
+            case "/puzzle" -> handlePuzzleCommand(chatId);
             case "/reset" -> sendResetConfirmation(chatId);
+            case "/settings" -> sendSettings(chatId);
             default -> {
             }
         }
@@ -87,8 +96,7 @@ public class ChessBot extends TelegramLongPollingBot {
         try {
             Map<Level, Integer> stats = puzzleDao.getSolvedCountByLevel(chatId);
             int total = stats.get(Level.EASY) + stats.get(Level.MEDIUM) + stats.get(Level.HARD);
-            String text = String.format(
-                    "Решено задач: %d\n\n🟢 Лёгкие: %d\n🟡 Средние: %d\n🔴 Сложные: %d",
+            String text = MessageTexts.STATS.formatted(
                     total, stats.get(Level.EASY), stats.get(Level.MEDIUM), stats.get(Level.HARD));
             sendMessage(chatId, text);
         } catch (SQLException e) {
@@ -116,6 +124,35 @@ public class ChessBot extends TelegramLongPollingBot {
         sendMessage(chatId, "⚠️ Весь прогресс будет удалён. Ты уверен?", keyboard);
     }
 
+    private void sendSettings(long chatId) {
+        try {
+            UserSettings settings = userSettingsDao.getOrDefault(chatId);
+            String repeatedLabel = settings.isAllowRepeated() ? "🔁 Отключить повторы" : "🔁 Включить повторы";
+            Level preferredLevel = settings.getPreferredLevel();
+            String levelLabel = preferredLevel == null ? "Уровень: спрашивать каждый раз"
+                    : "Уровень: " + switch (preferredLevel) {
+                        case EASY -> "🟢 Лёгкий";
+                        case MEDIUM -> "🟡 Средний";
+                        case HARD -> "🔴 Сложный";
+                        case RANDOM -> "🎲 Рандом";
+                    };
+            InlineKeyboardMarkup keyboard = InlineKeyboardMarkup.builder()
+                    .keyboardRow(List.of(
+                            InlineKeyboardButton.builder().text(repeatedLabel).callbackData("SETTINGS_TOGGLE_REPEATED")
+                                    .build()))
+                    .keyboardRow(List.of(
+                            InlineKeyboardButton.builder().text("🟢").callbackData("SETTINGS_LEVEL_EASY").build(),
+                            InlineKeyboardButton.builder().text("🟡").callbackData("SETTINGS_LEVEL_MEDIUM").build(),
+                            InlineKeyboardButton.builder().text("🔴").callbackData("SETTINGS_LEVEL_HARD").build(),
+                            InlineKeyboardButton.builder().text("🎲").callbackData("SETTINGS_LEVEL_RANDOM").build(),
+                            InlineKeyboardButton.builder().text("❓").callbackData("SETTINGS_LEVEL_NULL").build()))
+                    .build();
+            sendMessage(chatId, MessageTexts.SETTINGS.formatted(levelLabel), keyboard);
+        } catch (SQLException e) {
+            System.err.println(e);
+        }
+    }
+
     private void handleResetConfirm(long chatId) {
         try {
             puzzleDao.resetSolved(chatId);
@@ -125,11 +162,48 @@ public class ChessBot extends TelegramLongPollingBot {
         }
     }
 
-    private void handleLevelSelected(long chatId, UserSession session, String data) {
+    private void handlePuzzleCommand(long chatId) {
         try {
-            Puzzle puzzle = data.equals("RANDOM")
-                    ? puzzleDao.getRandom(chatId)
-                    : puzzleDao.getRandom(Level.valueOf(data), chatId);
+            UserSettings settings = userSettingsDao.getOrDefault(chatId);
+            if (settings.getPreferredLevel() != null) {
+                handleLevelSelected(chatId, sessionManager.getOrCreate(chatId), settings.getPreferredLevel());
+            } else {
+                sendLevelKeyboard(chatId);
+            }
+        } catch (SQLException e) {
+            System.err.println(e);
+        }
+    }
+
+    private void handleToggleRepeated(long chatId) {
+        try {
+            UserSettings settings = userSettingsDao.getOrDefault(chatId);
+            settings.setAllowRepeated(!settings.isAllowRepeated());
+            userSettingsDao.save(settings);
+            sendSettings(chatId);
+        } catch (SQLException e) {
+            System.err.println(e);
+        }
+    }
+
+    private void handleSetPreferredLevel(long chatId, String data) {
+        try {
+            UserSettings settings = userSettingsDao.getOrDefault(chatId);
+            Level level = data.equals("SETTINGS_LEVEL_NULL") ? null
+                    : Level.valueOf(data.replace("SETTINGS_LEVEL_", ""));
+            settings.setPreferredLevel(level);
+            userSettingsDao.save(settings);
+            sendSettings(chatId);
+        } catch (SQLException e) {
+            System.err.println(e);
+        }
+    }
+
+    private void handleLevelSelected(long chatId, UserSession session, Level level) {
+        try {
+            UserSettings settings = userSettingsDao.getOrDefault(chatId);
+            boolean allowRepeated = settings.isAllowRepeated();
+            Puzzle puzzle = allowRepeated ? puzzleDao.getRandom(level) : puzzleDao.getRandom(level, chatId);
             if (puzzle == null) {
                 sendMessage(chatId, "Ты решил все задачи этого уровня!");
                 return;
@@ -177,6 +251,7 @@ public class ChessBot extends TelegramLongPollingBot {
             case EASY -> "🟢 Легко";
             case MEDIUM -> "🟡 Средне";
             case HARD -> "🔴 Сложно";
+            case RANDOM -> "";
         };
         String color = puzzle.getPlayerColor().equals("WHITE") ? "⬜" : "⬛";
         String task = color + " Мат в " + puzzle.getMovesCount() + " " + movesWord(puzzle.getMovesCount());
