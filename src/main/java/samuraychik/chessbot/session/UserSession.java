@@ -112,6 +112,10 @@ public class UserSession {
         this.blitzEndTime = blitzEndTime;
     }
 
+    public long getBlitzRemainingMs() {
+        return blitzEndTime - System.currentTimeMillis();
+    }
+
     public void incrementBlitzSolved() {
         blitzSolved++;
     }

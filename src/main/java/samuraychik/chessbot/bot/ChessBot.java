@@ -262,7 +262,7 @@ public class ChessBot extends TelegramLongPollingBot {
             session.getBlitzUsedIds().add(puzzle.getId());
             session.setState(SessionState.BLITZ);
             scheduleBlitzTasks(chatId, session);
-            sendMessage(chatId, buildPuzzleMessage(puzzle, board));
+            sendMessage(chatId, buildBlitzPuzzleMessage(puzzle, board, session));
         } catch (SQLException e) {
             System.err.println(e);
         }
@@ -276,7 +276,8 @@ public class ChessBot extends TelegramLongPollingBot {
         if (!input.trim().equalsIgnoreCase(expected.getNotation())) {
             session.setBlitzEndTime(session.getBlitzEndTime() - BLITZ_PENALTY_MS);
             scheduleBlitzTasks(chatId, session);
-            sendMessage(chatId, "Неверный ход, -5 секунд ⏳");
+            sendMessage(chatId, "Неверный ход, -5 секунд ⏳\n\n"
+                    + formatRemaining(session.getBlitzRemainingMs()));
             return;
         }
 
@@ -287,13 +288,17 @@ public class ChessBot extends TelegramLongPollingBot {
             PuzzleMove response = puzzle.getMoves().get(session.getCurrentMoveIndex());
             BoardRenderer.applyMove(board, response.getFromSquare(), response.getToSquare());
             session.incrementMoveIndex();
-            sendMessage(chatId, response.getNotation() + "\n\n" + BoardRenderer.render(board));
+            sendMessage(chatId, response.getNotation() + "\n\n" + BoardRenderer.render(board) + "\n\n"
+                    + formatRemaining(session.getBlitzRemainingMs()));
             return;
         }
 
         session.incrementBlitzSolved();
         session.setBlitzEndTime(session.getBlitzEndTime() + BLITZ_BONUS_MS);
         scheduleBlitzTasks(chatId, session);
+
+        sendMessage(chatId, "✅ Задача решена! +10 секунд\n\n" + BoardRenderer.render(board) + "\n\n"
+                + formatRemaining(session.getBlitzRemainingMs()));
 
         try {
             Puzzle next = puzzleDao.getRandomForBlitz(getBlitzLevel(session.getBlitzSolved()),
@@ -306,7 +311,7 @@ public class ChessBot extends TelegramLongPollingBot {
             session.startPuzzle(next, nextBoard);
             session.getBlitzUsedIds().add(next.getId());
             session.setState(SessionState.BLITZ);
-            sendMessage(chatId, "✅ +10 секунд!\n\n" + buildPuzzleMessage(next, nextBoard));
+            sendMessage(chatId, buildBlitzPuzzleMessage(next, nextBoard, session));
         } catch (SQLException e) {
             System.err.println(e);
             endBlitz(chatId, session, "Произошла ошибка.");
@@ -315,7 +320,7 @@ public class ChessBot extends TelegramLongPollingBot {
 
     private void scheduleBlitzTasks(long chatId, UserSession session) {
         session.cancelBlitzTasks();
-        long remaining = session.getBlitzEndTime() - System.currentTimeMillis();
+        long remaining = session.getBlitzRemainingMs();
         if (remaining <= 0) {
             endBlitz(chatId, session, "Время вышло!");
             return;
@@ -346,12 +351,23 @@ public class ChessBot extends TelegramLongPollingBot {
         try {
             userStatsDao.updateHighscore(chatId, solved);
             UserStats stats = userStatsDao.getOrDefault(chatId);
-            sendMessage(chatId, reason + "\n\n⚡ Блиц завершён!\nРешено задач: " + solved
+            sendMessage(chatId, reason + "\n\n⚡ Блиц завершён!\n✅ Решено задач: " + solved
                     + "\n🏆 Рекорд: " + stats.getBlitzHighscore());
         } catch (SQLException e) {
             System.err.println(e);
             sendMessage(chatId, reason + "\n\n⚡ Блиц завершён! Решено задач: " + solved);
         }
+    }
+
+    private String buildBlitzPuzzleMessage(Puzzle puzzle, char[][] board, UserSession session) {
+        return "⚡ Счёт: " + session.getBlitzSolved() + "\n\n"
+                + buildPuzzleMessage(puzzle, board) + "\n"
+                + formatRemaining(session.getBlitzRemainingMs());
+    }
+
+    private String formatRemaining(long ms) {
+        long secs = Math.max(ms, 0) / 1000;
+        return String.format("⏱ %d:%02d", secs / 60, secs % 60);
     }
 
     private Level getBlitzLevel(int solved) {
