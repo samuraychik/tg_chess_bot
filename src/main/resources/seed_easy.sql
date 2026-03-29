@@ -53,7 +53,7 @@ VALUES
         '',
         'EASY',
         1,
-        'rn6/ppq2pp1/2pbb2k/3p3r/3P1P2/2P3Qn/PP4K1/R1B4R w - - 0 1',
+        'rn6/ppq2ppb/2pb3k/3p3r/3P1P2/2P3Q1/PP4K1/R1B4R w - - 0 1',
         'WHITE',
         'Q_g3-g5'
     ),
@@ -135,7 +135,7 @@ VALUES
         1,
         'KB4b1/P7/8/8/8/1k6/8/8 w - - 0 1',
         'BLACK',
-        'B_g8-d4'
+        'B_g8-d5'
     ),
     (
         '',
