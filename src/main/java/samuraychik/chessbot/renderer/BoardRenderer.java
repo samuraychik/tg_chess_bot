@@ -8,8 +8,20 @@ public class BoardRenderer {
         int toCol = toSquare.charAt(0) - 'a';
         int toRow = 8 - Character.getNumericValue(toSquare.charAt(1));
 
-        board[toRow][toCol] = board[fromRow][fromCol];
+        char piece = board[fromRow][fromCol];
+        board[toRow][toCol] = piece;
         board[fromRow][fromCol] = '.';
+
+        // рокировка
+        if ((piece == 'K' || piece == 'k') && Math.abs(toCol - fromCol) == 2) {
+            if (toCol > fromCol) {
+                board[toRow][5] = board[toRow][7];
+                board[toRow][7] = '.';
+            } else {
+                board[toRow][3] = board[toRow][0];
+                board[toRow][0] = '.';
+            }
+        }
     }
 
     public static String render(char[][] board) {
@@ -29,13 +41,13 @@ public class BoardRenderer {
             case 'K' -> "🤴🏻";
             case 'Q' -> "👩🏼";
             case 'R' -> "✊🏻";
-            case 'B' -> "☝🏻";
+            case 'B' -> "🙏🏻";
             case 'N' -> "👌🏻";
             case 'P' -> "👃🏻";
             case 'k' -> "🤴🏾";
             case 'q' -> "👩🏾";
             case 'r' -> "✊🏾";
-            case 'b' -> "☝🏾";
+            case 'b' -> "🙏🏾";
             case 'n' -> "👌🏾";
             case 'p' -> "👃🏾";
             default -> (row + col) % 2 == 0 ? "⬜️" : "◼️";

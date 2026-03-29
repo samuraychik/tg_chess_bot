@@ -116,8 +116,7 @@ public class ChessBot extends TelegramLongPollingBot {
             case "/settings" -> sendSettings(chatId);
             case "/help" -> sendMessage(chatId, MessageTexts.HELP);
             case "/debug" -> sendMessage(chatId, "chatId: " + chatId + "\nstate: " + session.getState());
-            default -> {
-            }
+            default -> sendMessage(chatId, "Неизвестная команда. Список команд: /help");
         }
     }
 
