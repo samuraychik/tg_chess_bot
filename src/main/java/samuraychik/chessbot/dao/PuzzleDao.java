@@ -146,13 +146,12 @@ public class PuzzleDao {
 
     private Puzzle mapRow(ResultSet rs) throws SQLException {
         int id = rs.getInt("id");
-        String name = rs.getString("name");
         Level level = Level.valueOf(rs.getString("level"));
         int movesCount = rs.getInt("moves_count");
         String fen = rs.getString("fen");
         String playerColor = rs.getString("player_color");
         List<PuzzleMove> moves = parseMoves(rs.getString("moves"));
-        return new Puzzle(id, name, level, movesCount, fen, playerColor, moves);
+        return new Puzzle(id, level, movesCount, fen, playerColor, moves);
     }
 
     private List<PuzzleMove> parseMoves(String moves) {

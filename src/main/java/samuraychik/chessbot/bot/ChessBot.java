@@ -445,9 +445,7 @@ public class ChessBot extends TelegramLongPollingBot {
         };
         String color = puzzle.getPlayerColor().equals("WHITE") ? "⬜" : "⬛";
         String task = color + " Мат в " + puzzle.getMovesCount() + " " + movesWord(puzzle.getMovesCount());
-        String name = puzzle.getName();
-        String header = level + "\n" + ((name != null && !name.isBlank()) ? name + "\n" + task : task);
-        return header + "\n\n" + BoardRenderer.render(board);
+        return level + "\n" + task + "\n\n" + BoardRenderer.render(board);
     }
 
     private String movesWord(int n) {

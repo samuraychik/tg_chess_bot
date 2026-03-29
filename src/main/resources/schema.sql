@@ -1,7 +1,6 @@
 CREATE TABLE
     IF NOT EXISTS puzzles (
         id SERIAL PRIMARY KEY,
-        name TEXT,
         level TEXT NOT NULL CHECK (level IN ('EASY', 'MEDIUM', 'HARD')),
         moves_count INT NOT NULL,
         fen TEXT NOT NULL,
