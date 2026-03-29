@@ -27,7 +27,7 @@ public class PuzzleDao {
                 WHERE level = ?
                 AND id NOT IN (SELECT puzzle_id FROM user_solved_puzzles WHERE user_id = ?)
                 ORDER BY RANDOM() LIMIT 1
-                    """;
+                """;
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setString(1, level.name());
             stmt.setLong(2, userId);
@@ -38,6 +38,40 @@ public class PuzzleDao {
             }
         }
         return null;
+    }
+
+    public Puzzle getRandom(long userId) throws SQLException {
+        String sql = """
+                SELECT * FROM puzzles
+                WHERE id NOT IN (SELECT puzzle_id FROM user_solved_puzzles WHERE user_id = ?)
+                ORDER BY RANDOM() LIMIT 1
+                """;
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setLong(1, userId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return mapRow(rs);
+                }
+            }
+        }
+        return null;
+    }
+
+    public void recordSolved(long userId, int puzzleId) throws SQLException {
+        String sql = "INSERT INTO user_solved_puzzles (user_id, puzzle_id) VALUES (?, ?) ON CONFLICT DO NOTHING";
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setLong(1, userId);
+            stmt.setInt(2, puzzleId);
+            stmt.executeUpdate();
+        }
+    }
+
+    public void resetSolved(long userId) throws SQLException {
+        String sql = "DELETE FROM user_solved_puzzles WHERE user_id = ?";
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setLong(1, userId);
+            stmt.executeUpdate();
+        }
     }
 
     public Map<Level, Integer> getSolvedCountByLevel(long userId) throws SQLException {

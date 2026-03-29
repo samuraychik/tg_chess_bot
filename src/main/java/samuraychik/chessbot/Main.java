@@ -46,7 +46,7 @@ public class Main {
 
         try {
             TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
-            botsApi.registerBot(new ChessBot(token, username, puzzleDao, db.getConnection()));
+            botsApi.registerBot(new ChessBot(token, username, puzzleDao));
             System.out.println("бот запущен!!!");
         } catch (TelegramApiException e) {
             System.err.println(e);
