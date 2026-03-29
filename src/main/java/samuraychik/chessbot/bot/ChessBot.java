@@ -173,10 +173,15 @@ public class ChessBot extends TelegramLongPollingBot {
     }
 
     private String buildPuzzleMessage(Puzzle puzzle, char[][] board) {
+        String level = switch (puzzle.getLevel()) {
+            case EASY -> "🟢 Легко";
+            case MEDIUM -> "🟡 Средне";
+            case HARD -> "🔴 Сложно";
+        };
         String color = puzzle.getPlayerColor().equals("WHITE") ? "⬜" : "⬛";
         String task = color + " Мат в " + puzzle.getMovesCount() + " " + movesWord(puzzle.getMovesCount());
         String name = puzzle.getName();
-        String header = (name != null && !name.isBlank()) ? name + "\n" + task : task;
+        String header = level + "\n" + ((name != null && !name.isBlank()) ? name + "\n" + task : task);
         return header + "\n\n" + BoardRenderer.render(board);
     }
 
