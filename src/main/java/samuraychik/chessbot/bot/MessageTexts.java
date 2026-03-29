@@ -10,6 +10,7 @@ public class MessageTexts {
 
     public static final String HELP = """
             /puzzle — решить задачку
+            /blitz — сыграть в блиц-режим
             /stats — посмотреть статистику
             /reset — сбросить прогресс
             /settings — открыть настройки
@@ -34,6 +35,15 @@ public class MessageTexts {
             + a8Q — проведение пешки (в ферзя)
             """;
 
+    public static final String BLITZ = """
+            ⚡ Блиц-режим
+
+            Реши как можно больше задач за 2 минуты!
+
+            +10 сек за решённую задачу
+            -5 сек за неверный ход
+            """;
+
     public static final String SETTINGS = """
             ⚙️ Настройки
             Здесь можно выбрать автоматический уровень сложности и включить повторы задач.
@@ -47,6 +57,8 @@ public class MessageTexts {
             🟢 Лёгкие: %d
             🟡 Средние: %d
             🔴 Сложные: %d
+
+            ⚡ Рекорд в блиц-режиме: %d
             """;
 
     private MessageTexts() {

@@ -3,6 +3,10 @@ package samuraychik.chessbot.bot;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
@@ -14,10 +18,12 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import samuraychik.chessbot.dao.PuzzleDao;
 import samuraychik.chessbot.dao.UserSettingsDao;
+import samuraychik.chessbot.dao.UserStatsDao;
 import samuraychik.chessbot.model.Level;
 import samuraychik.chessbot.model.Puzzle;
 import samuraychik.chessbot.model.PuzzleMove;
 import samuraychik.chessbot.model.UserSettings;
+import samuraychik.chessbot.model.UserStats;
 import samuraychik.chessbot.renderer.BoardRenderer;
 import samuraychik.chessbot.renderer.FenParser;
 import samuraychik.chessbot.session.SessionManager;
@@ -26,16 +32,25 @@ import samuraychik.chessbot.session.UserSession;
 
 public class ChessBot extends TelegramLongPollingBot {
 
+    private static final long BLITZ_INITIAL_MS = 120_000;
+    private static final long BLITZ_BONUS_MS = 10_000;
+    private static final long BLITZ_PENALTY_MS = 5_000;
+
     private final String botUsername;
     private final SessionManager sessionManager = new SessionManager();
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+
     private final PuzzleDao puzzleDao;
     private final UserSettingsDao userSettingsDao;
+    private final UserStatsDao userStatsDao;
 
-    public ChessBot(String botToken, String botUsername, PuzzleDao puzzleDao, UserSettingsDao userSettingsDao) {
+    public ChessBot(String botToken, String botUsername, PuzzleDao puzzleDao, UserSettingsDao userSettingsDao,
+            UserStatsDao userStatsDao) {
         super(botToken);
         this.botUsername = botUsername;
         this.puzzleDao = puzzleDao;
         this.userSettingsDao = userSettingsDao;
+        this.userStatsDao = userStatsDao;
     }
 
     @Override
@@ -60,6 +75,7 @@ public class ChessBot extends TelegramLongPollingBot {
         UserSession session = sessionManager.getOrCreate(chatId);
 
         switch (data) {
+            case "BLITZ_START" -> startBlitz(chatId, session);
             case "RESET_CONFIRM" -> handleResetConfirm(chatId);
             case "SETTINGS_TOGGLE_REPEATED" -> handleToggleRepeated(chatId);
             case "SETTINGS_LEVEL_EASY", "SETTINGS_LEVEL_MEDIUM", "SETTINGS_LEVEL_HARD",
@@ -78,15 +94,20 @@ public class ChessBot extends TelegramLongPollingBot {
             handleMove(chatId, session, text);
             return;
         }
+        if (session.getState() == SessionState.BLITZ && !text.startsWith("/")) {
+            handleBlitzMove(chatId, session, text);
+            return;
+        }
 
         switch (text) {
             case "/start" -> sendMessage(chatId, MessageTexts.START);
-            case "/help" -> sendMessage(chatId, MessageTexts.HELP);
-            case "/debug" -> sendMessage(chatId, "chatId: " + chatId + "\nstate: " + session.getState());
-            case "/stats" -> sendStats(chatId);
             case "/puzzle" -> handlePuzzleCommand(chatId);
+            case "/blitz" -> sendBlitzInfo(chatId);
+            case "/stats" -> sendStats(chatId);
             case "/reset" -> sendResetConfirmation(chatId);
             case "/settings" -> sendSettings(chatId);
+            case "/help" -> sendMessage(chatId, MessageTexts.HELP);
+            case "/debug" -> sendMessage(chatId, "chatId: " + chatId + "\nstate: " + session.getState());
             default -> {
             }
         }
@@ -96,8 +117,10 @@ public class ChessBot extends TelegramLongPollingBot {
         try {
             Map<Level, Integer> stats = puzzleDao.getSolvedCountByLevel(chatId);
             int total = stats.get(Level.EASY) + stats.get(Level.MEDIUM) + stats.get(Level.HARD);
+            UserStats userStats = userStatsDao.getOrDefault(chatId);
             String text = MessageTexts.STATS.formatted(
-                    total, stats.get(Level.EASY), stats.get(Level.MEDIUM), stats.get(Level.HARD));
+                    total, stats.get(Level.EASY), stats.get(Level.MEDIUM), stats.get(Level.HARD),
+                    userStats.getBlitzHighscore());
             sendMessage(chatId, text);
         } catch (SQLException e) {
             System.err.println(e);
@@ -205,7 +228,7 @@ public class ChessBot extends TelegramLongPollingBot {
             boolean allowRepeated = settings.isAllowRepeated();
             Puzzle puzzle = allowRepeated ? puzzleDao.getRandom(level) : puzzleDao.getRandom(level, chatId);
             if (puzzle == null) {
-                sendMessage(chatId, "Ты решил все задачи этого уровня!");
+                sendMessage(chatId, "Не удалось найти задачу.");
                 return;
             }
             char[][] board = FenParser.parse(puzzle.getFen());
@@ -214,6 +237,129 @@ public class ChessBot extends TelegramLongPollingBot {
         } catch (SQLException e) {
             System.err.println(e);
         }
+    }
+
+    private void sendBlitzInfo(long chatId) {
+        InlineKeyboardMarkup keyboard = InlineKeyboardMarkup.builder()
+                .keyboardRow(List.of(
+                        InlineKeyboardButton.builder().text("⚡ Начать!").callbackData("BLITZ_START").build()))
+                .build();
+        sendMessage(chatId, MessageTexts.BLITZ, keyboard);
+    }
+
+    private void startBlitz(long chatId, UserSession session) {
+        try {
+            long endTime = System.currentTimeMillis() + BLITZ_INITIAL_MS;
+            session.startBlitz(endTime);
+            Puzzle puzzle = puzzleDao.getRandomForBlitz(getBlitzLevel(0), session.getBlitzUsedIds());
+            if (puzzle == null) {
+                sendMessage(chatId, "Не удалось найти задачу — завершаю сеанс.");
+                session.resetBlitz();
+                return;
+            }
+            char[][] board = FenParser.parse(puzzle.getFen());
+            session.startPuzzle(puzzle, board);
+            session.getBlitzUsedIds().add(puzzle.getId());
+            session.setState(SessionState.BLITZ);
+            scheduleBlitzTasks(chatId, session);
+            sendMessage(chatId, buildPuzzleMessage(puzzle, board));
+        } catch (SQLException e) {
+            System.err.println(e);
+        }
+    }
+
+    private void handleBlitzMove(long chatId, UserSession session, String input) {
+        Puzzle puzzle = session.getActivePuzzle();
+        char[][] board = session.getBoard();
+        PuzzleMove expected = puzzle.getMoves().get(session.getCurrentMoveIndex());
+
+        if (!input.trim().equalsIgnoreCase(expected.getNotation())) {
+            session.setBlitzEndTime(session.getBlitzEndTime() - BLITZ_PENALTY_MS);
+            scheduleBlitzTasks(chatId, session);
+            sendMessage(chatId, "Неверный ход, -5 секунд ⏳");
+            return;
+        }
+
+        BoardRenderer.applyMove(board, expected.getFromSquare(), expected.getToSquare());
+        session.incrementMoveIndex();
+
+        if (session.getCurrentMoveIndex() < puzzle.getMoves().size()) {
+            PuzzleMove response = puzzle.getMoves().get(session.getCurrentMoveIndex());
+            BoardRenderer.applyMove(board, response.getFromSquare(), response.getToSquare());
+            session.incrementMoveIndex();
+            sendMessage(chatId, response.getNotation() + "\n\n" + BoardRenderer.render(board));
+            return;
+        }
+
+        session.incrementBlitzSolved();
+        session.setBlitzEndTime(session.getBlitzEndTime() + BLITZ_BONUS_MS);
+        scheduleBlitzTasks(chatId, session);
+
+        try {
+            Puzzle next = puzzleDao.getRandomForBlitz(getBlitzLevel(session.getBlitzSolved()),
+                    session.getBlitzUsedIds());
+            if (next == null) {
+                endBlitz(chatId, session, "Задачи закончились.");
+                return;
+            }
+            char[][] nextBoard = FenParser.parse(next.getFen());
+            session.startPuzzle(next, nextBoard);
+            session.getBlitzUsedIds().add(next.getId());
+            session.setState(SessionState.BLITZ);
+            sendMessage(chatId, "✅ +10 секунд!\n\n" + buildPuzzleMessage(next, nextBoard));
+        } catch (SQLException e) {
+            System.err.println(e);
+            endBlitz(chatId, session, "Произошла ошибка.");
+        }
+    }
+
+    private void scheduleBlitzTasks(long chatId, UserSession session) {
+        session.cancelBlitzTasks();
+        long remaining = session.getBlitzEndTime() - System.currentTimeMillis();
+        if (remaining <= 0) {
+            endBlitz(chatId, session, "Время вышло!");
+            return;
+        }
+
+        ScheduledFuture<?> endTask = scheduler.schedule(
+                () -> endBlitz(chatId, session, "Время вышло!"),
+                remaining, TimeUnit.MILLISECONDS);
+        session.setBlitzEndTask(endTask);
+
+        long[] warnDelays = { remaining - 60_000, remaining - 30_000, remaining - 10_000 };
+        String[] warnMessages = { "⏰ Осталась 1 минута!", "⏰ Осталось 30 секунд!", "⏰ Осталось 10 секунд!" };
+        ScheduledFuture<?>[] warnTasks = new ScheduledFuture<?>[3];
+        for (int i = 0; i < 3; i++) {
+            if (warnDelays[i] > 0) {
+                final String msg = warnMessages[i];
+                warnTasks[i] = scheduler.schedule(() -> sendMessage(chatId, msg), warnDelays[i], TimeUnit.MILLISECONDS);
+            }
+        }
+        session.setBlitzWarnTasks(warnTasks);
+    }
+
+    private void endBlitz(long chatId, UserSession session, String reason) {
+        if (session.getState() != SessionState.BLITZ)
+            return;
+        int solved = session.getBlitzSolved();
+        session.resetBlitz();
+        try {
+            userStatsDao.updateHighscore(chatId, solved);
+            UserStats stats = userStatsDao.getOrDefault(chatId);
+            sendMessage(chatId, reason + "\n\n⚡ Блиц завершён!\nРешено задач: " + solved
+                    + "\n🏆 Рекорд: " + stats.getBlitzHighscore());
+        } catch (SQLException e) {
+            System.err.println(e);
+            sendMessage(chatId, reason + "\n\n⚡ Блиц завершён! Решено задач: " + solved);
+        }
+    }
+
+    private Level getBlitzLevel(int solved) {
+        if (solved < 8)
+            return Level.EASY;
+        if (solved < 17)
+            return Level.MEDIUM;
+        return Level.HARD;
     }
 
     private void handleMove(long chatId, UserSession session, String input) {

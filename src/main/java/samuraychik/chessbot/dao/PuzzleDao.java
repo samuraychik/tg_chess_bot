@@ -8,6 +8,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import samuraychik.chessbot.model.Level;
 import samuraychik.chessbot.model.Puzzle;
@@ -81,6 +83,22 @@ public class PuzzleDao {
                 if (rs.next()) {
                     return mapRow(rs);
                 }
+            }
+        }
+        return null;
+    }
+
+    public Puzzle getRandomForBlitz(Level level, Set<Integer> excludedIds) throws SQLException {
+        String excludedIdsSql = excludedIds.isEmpty()
+                ? "NULL"
+                : excludedIds.stream().map(String::valueOf).collect(Collectors.joining(", "));
+        String sql = "SELECT * FROM puzzles WHERE level = ? AND id NOT IN (" + excludedIdsSql
+                + ") ORDER BY RANDOM() LIMIT 1";
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setString(1, level.name());
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next())
+                    return mapRow(rs);
             }
         }
         return null;
