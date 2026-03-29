@@ -74,7 +74,7 @@ public class ChessBot extends TelegramLongPollingBot {
         long chatId = update.getMessage().getChatId();
         UserSession session = sessionManager.getOrCreate(chatId);
 
-        if (session.getState() == SessionState.ACTIVE && !text.startsWith("/")) {
+        if (session.getState() == SessionState.PUZZLE && !text.startsWith("/")) {
             handleMove(chatId, session, text);
             return;
         }
