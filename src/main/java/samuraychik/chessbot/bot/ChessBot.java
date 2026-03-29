@@ -103,6 +103,14 @@ public class ChessBot extends TelegramLongPollingBot {
             case "/start" -> sendMessage(chatId, MessageTexts.START);
             case "/puzzle" -> handlePuzzleCommand(chatId);
             case "/blitz" -> sendBlitzInfo(chatId);
+            case "/skip" -> {
+                if (session.getState() == SessionState.BLITZ)
+                    handleBlitzSkip(chatId, session);
+            }
+            case "/stop" -> {
+                if (session.getState() == SessionState.BLITZ)
+                    endBlitz(chatId, session, "Блиц завершён досрочно.");
+            }
             case "/stats" -> sendStats(chatId);
             case "/reset" -> sendResetConfirmation(chatId);
             case "/settings" -> sendSettings(chatId);
@@ -276,7 +284,7 @@ public class ChessBot extends TelegramLongPollingBot {
         if (!input.trim().equalsIgnoreCase(expected.getNotation())) {
             session.setBlitzEndTime(session.getBlitzEndTime() - BLITZ_PENALTY_MS);
             scheduleBlitzTasks(chatId, session);
-            sendMessage(chatId, "Неверный ход, -5 секунд ⏳\n\n"
+            sendMessage(chatId, "❌ Неверный ход, -5 секунд\n\n"
                     + formatRemaining(session.getBlitzRemainingMs()));
             return;
         }
@@ -300,6 +308,18 @@ public class ChessBot extends TelegramLongPollingBot {
         sendMessage(chatId, "✅ Задача решена! +10 секунд\n\n" + BoardRenderer.render(board) + "\n\n"
                 + formatRemaining(session.getBlitzRemainingMs()));
 
+        sendNextBlitzPuzzle(chatId, session);
+    }
+
+    private void handleBlitzSkip(long chatId, UserSession session) {
+        session.setBlitzEndTime(session.getBlitzEndTime() - BLITZ_PENALTY_MS);
+        scheduleBlitzTasks(chatId, session);
+        sendMessage(chatId, "⏭ Пропуск задачи, -5 секунд\n\n"
+                + formatRemaining(session.getBlitzRemainingMs()));
+        sendNextBlitzPuzzle(chatId, session);
+    }
+
+    private void sendNextBlitzPuzzle(long chatId, UserSession session) {
         try {
             Puzzle next = puzzleDao.getRandomForBlitz(getBlitzLevel(session.getBlitzSolved()),
                     session.getBlitzUsedIds());
@@ -384,7 +404,7 @@ public class ChessBot extends TelegramLongPollingBot {
         PuzzleMove expected = puzzle.getMoves().get(session.getCurrentMoveIndex());
 
         if (!input.trim().equalsIgnoreCase(expected.getNotation())) {
-            sendMessage(chatId, "Неверный ход, попробуй ещё раз");
+            sendMessage(chatId, "❌ Неверный ход, попробуй ещё раз");
             return;
         }
 
@@ -397,7 +417,7 @@ public class ChessBot extends TelegramLongPollingBot {
             } catch (SQLException e) {
                 System.err.println(e);
             }
-            sendMessage(chatId, "Задача решена! 🎉\n\n" + BoardRenderer.render(board));
+            sendMessage(chatId, "✅ Задача решена!\n\n" + BoardRenderer.render(board));
             session.reset();
             return;
         }
