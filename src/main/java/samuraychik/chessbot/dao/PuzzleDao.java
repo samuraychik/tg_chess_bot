@@ -89,11 +89,11 @@ public class PuzzleDao {
     }
 
     public Puzzle getRandomForBlitz(Level level, Set<Integer> excludedIds) throws SQLException {
-        String excludedIdsSql = excludedIds.isEmpty()
-                ? "NULL"
-                : excludedIds.stream().map(String::valueOf).collect(Collectors.joining(", "));
-        String sql = "SELECT * FROM puzzles WHERE level = ? AND id NOT IN (" + excludedIdsSql
-                + ") ORDER BY RANDOM() LIMIT 1";
+        String sql = excludedIds.isEmpty()
+                ? "SELECT * FROM puzzles WHERE level = ? ORDER BY RANDOM() LIMIT 1"
+                : "SELECT * FROM puzzles WHERE level = ? AND id NOT IN ("
+                        + excludedIds.stream().map(String::valueOf).collect(Collectors.joining(", "))
+                        + ") ORDER BY RANDOM() LIMIT 1";
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setString(1, level.name());
             try (ResultSet rs = stmt.executeQuery()) {
