@@ -194,15 +194,23 @@ public class ChessBot extends TelegramLongPollingBot {
     }
 
     private void handlePuzzleCommand(long chatId) {
+        UserSession session = sessionManager.getOrCreate(chatId);
+        endBlitzIfRunning(chatId, session);
         try {
             UserSettings settings = userSettingsDao.getOrDefault(chatId);
             if (settings.getPreferredLevel() != null) {
-                handleLevelSelected(chatId, sessionManager.getOrCreate(chatId), settings.getPreferredLevel());
+                handleLevelSelected(chatId, session, settings.getPreferredLevel());
             } else {
                 sendLevelKeyboard(chatId);
             }
         } catch (SQLException e) {
             System.err.println(e);
+        }
+    }
+
+    private void endBlitzIfRunning(long chatId, UserSession session) {
+        if (session.getState() == SessionState.BLITZ) {
+            endBlitz(chatId, session, "Блиц завершён досрочно.");
         }
     }
 
@@ -256,6 +264,7 @@ public class ChessBot extends TelegramLongPollingBot {
     }
 
     private void startBlitz(long chatId, UserSession session) {
+        endBlitzIfRunning(chatId, session);
         try {
             long endTime = System.currentTimeMillis() + BLITZ_INITIAL_MS;
             session.startBlitz(endTime);
